@@ -4,7 +4,7 @@ const { register, verifyEmail, resendVerificationOTP, login, refreshToken, logou
 const authenticate = require("../middleware/auth.middleware");
 const { authLimiter, strictAuthLimiter } = require("../middleware/ratelimit.middleware");
 
-const validate = require("../middleware/validate.middleware");
+const { validate } = require("../middleware/validate.middleware");
 const {
   registerSchema,
   loginSchema,

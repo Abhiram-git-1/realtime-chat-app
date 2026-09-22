@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const validate = (schema) =>{
     return (req, res, next) =>{
         const {error, value} = schema.validate(req.body, {
@@ -16,4 +17,52 @@ const validate = (schema) =>{
     };
 };
 
-module.exports = validate;
+const validateObjectId = (paramName) => {
+  return (req, res, next) => {
+    const id = req.params[paramName];
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid ${paramName}`,
+      });
+    }
+
+    next();
+  };
+};
+
+const validateBody = (schema) =>{
+  return (req,res,next) =>{
+    const {error} = schema.validate(req.body);
+
+    if(error){
+      return res.status(400).json({
+        success:false,
+        message: error.details[0].message,
+      });
+    }
+    next();
+  }
+}
+
+const validateQuery = (schema) =>{
+  return (req,res,next) =>{
+    const {error} = schema.validate(req.query);
+
+    if(error){
+      return res.status(400).json({
+        success:false,
+        message: error.details[0].message,
+      });
+    }
+    next();
+  }
+}
+
+module.exports = {
+  validate,
+  validateObjectId,
+  validateBody,
+  validateQuery,
+};
