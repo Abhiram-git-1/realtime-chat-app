@@ -1,6 +1,6 @@
 const profileService = require("../services/profile.service");
 
-const getProfile = async (req, res) => {
+const getProfile = async (req, res, next) => {
   try {
     const user = await profileService.getProfile(req.user.userId);
 
@@ -18,14 +18,11 @@ const getProfile = async (req, res) => {
   } catch (error) {
     console.error("Get profile error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch profile",
-    });
+    next(error);
   }
 };
 
-const updateProfile = async (req, res) => {
+const updateProfile = async (req, res, next) => {
   try {
     const allowedFields = [
       "name",
@@ -62,10 +59,7 @@ const updateProfile = async (req, res) => {
   } catch (error) {
     console.error("Update profile error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update profile",
-    });
+    next(error);
   }
 };
 

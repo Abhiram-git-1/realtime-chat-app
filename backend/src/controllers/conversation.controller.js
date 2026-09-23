@@ -1,7 +1,7 @@
 const conversationService = require("../services/conversation.service");
 const ConversationMember = require("../models/ConversationMember");
 const User = require("../models/User");
-const getConversations = async (req, res,) =>{
+const getConversations = async (req, res, next) =>{
     try{
         const conversations = await conversationService.getConversationsByUserId(req.user.userId);
 
@@ -11,15 +11,11 @@ const getConversations = async (req, res,) =>{
         });
     } catch(error){
         console.error("Get conversations error:", error);
-
-        return res.status(500).json({
-            success:false,
-            message:"Failed to fetch conversations",
-        });
+        next(error);
     }
 };
 
-const createConversation = async (req, res) => {
+const createConversation = async (req, res, next) => {
     try{
         const { type, name, memberIds =[],} = req.body;
 
@@ -37,14 +33,11 @@ const createConversation = async (req, res) => {
         });
     } catch(error){
         console.error("Create conversation error:", error);
-        return res.status(error.statusCode || 500).json({
-            success: false,
-            message: error.message ||"Failed to create conversation"
-        });
+        next(error);
     }
 };
 
-const getConversationById = async (req, res) => {
+const getConversationById = async (req, res, next) => {
   try {
     const conversation =
       await conversationService.getConversationById(
@@ -77,15 +70,11 @@ const getConversationById = async (req, res) => {
     });
   } catch (error) {
     console.error("Get conversation error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch conversation",
-    });
+    next(error);
   }
 };
 
-const updateConversation = async (req, res) => {
+const updateConversation = async (req, res, next) => {
   try {
     const conversation =
       await conversationService.getConversationById(
@@ -144,15 +133,11 @@ const updateConversation = async (req, res) => {
     });
   } catch (error) {
     console.error("Update conversation error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update conversation",
-    });
+    next(error);
   }
 };
 
-const deleteConversation = async (req, res) => {
+const deleteConversation = async (req, res, next) => {
   try {
     const conversation =
       await conversationService.getConversationById(
@@ -195,15 +180,11 @@ const deleteConversation = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete conversation error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete conversation",
-    });
+    next(error);
   }
 };
 
-const getConversationMembers = async (req, res) => {
+const getConversationMembers = async (req, res, next) => {
   try {
     const conversation =
       await conversationService.getConversationById(
@@ -241,14 +222,11 @@ const getConversationMembers = async (req, res) => {
   } catch (error) {
     console.error("Get conversation members error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch conversation members",
-    });
+    next(error);
   }
 };
 
-const addconversationMember = async (req, res) =>{
+const addconversationMember = async (req, res, next) =>{
     try{
         const {userId} = req.body;
         const conversation = await conversationService.getConversationById(req.params.id);
@@ -272,7 +250,14 @@ const addconversationMember = async (req, res) =>{
                 message: "You are not an admin of this conversation",
             });
         }
-
+        const user = await User.findById(userId);
+        if(!user){
+          return res.status(404).json({
+            success: false,
+            message: "User not found",
+          })
+        }
+        
         const existingMember = await ConversationMember.findOne({
             conversationId: req.params.id,
             userId,
@@ -295,14 +280,11 @@ const addconversationMember = async (req, res) =>{
     } catch(error){
         console.error("Add conversation member error:", error);
 
-        return res.status(500).json({
-            success: false,
-            message: "Failed to add user to conversation",
-        });
+        next(error);
     }
 }
 
-const removeConversationMember = async (req, res) => {
+const removeConversationMember = async (req, res, next) => {
     try{
         const {id, userId} = req.params;
         const conversation = await conversationService.getConversationById(id);
@@ -348,14 +330,11 @@ const removeConversationMember = async (req, res) => {
         });
     } catch(error){
         console.error("Remove conversation member error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to remove user from conversation",
-        });
+        next(error);
     }
 };
 
-const updateConversationMember = async (req, res) => {
+const updateConversationMember = async (req, res, next) => {
   try {
     const { id, userId } = req.params;
     const { role } = req.body;
@@ -411,19 +390,13 @@ const updateConversationMember = async (req, res) => {
       member,
     });
   } catch (error) {
-    console.error(
-      "Update conversation member error:",
-      error
-    );
+    console.error("Update conversation member error:",error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update conversation member",
-    });
+    next(error);
   }
 };
 
-const searchConversations = async (req, res) => {
+const searchConversations = async (req, res, next) => {
   try {
     const { q } = req.query;
 
@@ -440,10 +413,7 @@ const searchConversations = async (req, res) => {
   } catch (error) {
     console.error("Search conversations error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to search conversations",
-    });
+    next(error);
   }
 };
 

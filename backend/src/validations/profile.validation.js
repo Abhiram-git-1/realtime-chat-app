@@ -1,4 +1,4 @@
-const joi = require("joi");
+const Joi = require("joi");
 
 const updateProfileSchema = Joi.object({
   name: Joi.string().trim().min(3).max(50),

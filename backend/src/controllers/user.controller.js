@@ -1,6 +1,6 @@
 const userService = require("../services/user.service");
 
-const getUsers = async (req, res) =>{
+const getUsers = async (req, res, next) =>{
     try{
         const users = await userService.getUsers(req.user.userId);
 
@@ -10,14 +10,11 @@ const getUsers = async (req, res) =>{
         });
     } catch (error){
         console.error("Get Users error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error",
-        });
+        next(error);
     }
 };
 
-const getUserById = async (req, res) => {
+const getUserById = async (req, res, next) => {
   try {
     const user = await userService.getUserById(req.params.id);
 
@@ -35,14 +32,11 @@ const getUserById = async (req, res) => {
   } catch (error) {
     console.error("Get user by ID error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch user",
-    });
+    next(error);
   }
 };
 
-const updateUser = async ( req, res)=>{
+const updateUser = async ( req, res, next)=>{
     try {
         if(req.user.userId !== req.params.id){
             return res.status(403).json({
@@ -76,15 +70,12 @@ const updateUser = async ( req, res)=>{
     }
     catch(error){
         console.error("updateUser error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to update user",
-        });
+        next(error);
     }
         
 };
 
-const searchUsers = async (req, res) => {
+const searchUsers = async (req, res, next) => {
   try {
     const { q } = req.query;
 
@@ -107,10 +98,7 @@ const searchUsers = async (req, res) => {
   } catch (error) {
     console.error("Search users error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to search users",
-    });
+    next(error);
   }
 };
 

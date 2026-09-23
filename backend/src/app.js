@@ -10,6 +10,7 @@ const profileRoutes = require("./routes/profile.routes");
 const conversationRoutes = require("./routes/conversation.routes");
 const messageRoutes = require("./routes/message.routes");
 const searchRoutes = require("./routes/search.routes");
+const errorHandler = require("./middleware/error.middleware");
 
 const app = express();
 
@@ -26,6 +27,11 @@ app.use(
 
 app.use(express.json());
 
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log(
+    "EMAIL_PASS exists:",
+    !!process.env.EMAIL_PASS
+);
 
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
@@ -40,5 +46,7 @@ app.get("/api/health", (req, res) => {
         message: "Chat API is running"
     });
 });
+
+app.use(errorHandler);
 
 module.exports = app;

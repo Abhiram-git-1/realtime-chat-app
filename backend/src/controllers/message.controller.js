@@ -1,15 +1,14 @@
 const messageService = require("../services/message.service");
+const conversationService = require("../services/conversation.service");
+
 const ConversationMember = require("../models/ConversationMember");
 const Conversation = require("../models/Conversation");
 
-const getConversationMessages = async (req, res) => {
+const getConversationMessages = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const conversation = await Conversation.findOne({
-      _id: id,
-      deletedAt: null,
-    });
+    const conversation = await conversationService.getConversationById(id);
 
     if (!conversation) {
       return res.status(404).json({
@@ -40,14 +39,11 @@ const getConversationMessages = async (req, res) => {
   } catch (error) {
     console.error("Get conversation messages error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch messages",
-    });
+    next(error);
   }
 };
 
-const createMessage = async (req, res) => {
+const createMessage = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
@@ -89,15 +85,11 @@ const createMessage = async (req, res) => {
   } catch (error) {
     console.error("Create message error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create message",
-    });
+    next(error);
   }
 };
 
-
-const getMessageById = async (req, res) => {
+const getMessageById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -141,16 +133,13 @@ const getMessageById = async (req, res) => {
   } catch (error) {
     console.error("Get message error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch message",
-    });
+    next(error);
   }
 };
 
 const MESSAGE_EDIT_LIMIT = 15 * 60 * 1000; // 15 minutes
 
-const updateMessage = async (req, res) => {
+const updateMessage = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
@@ -219,14 +208,11 @@ const updateMessage = async (req, res) => {
   } catch (error) {
     console.error("Update message error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update message",
-    });
+    next(error);
   }
 };
 
-const deleteMessage = async (req, res) => {
+const deleteMessage = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -239,10 +225,7 @@ const deleteMessage = async (req, res) => {
       });
     }
 
-    const conversation = await Conversation.findOne({ 
-      _id: message.conversationId,
-      deletedAt: null,
-    });
+    const conversation = await conversationService.getConversationById(message.conversationId);
 
     if (!conversation) {
       return res.status(404).json({
@@ -281,10 +264,7 @@ const deleteMessage = async (req, res) => {
   } catch (error) {
     console.error("Delete message error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete message",
-    });
+    next(error);
   }
 };
 

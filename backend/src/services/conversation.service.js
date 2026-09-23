@@ -1,6 +1,6 @@
 const ConversationMember = require("../models/ConversationMember");
 const Conversation = require("../models/Conversation");
-
+const User = require("../models/User");
 const getConversationsByUserId = async (userId) =>{
     const memberships = await ConversationMember.find({
         userId,
@@ -48,19 +48,37 @@ const getConversationsByUserId = async (userId) =>{
 };
 */
 
-const createConversation = async ({
-  creatorId,
-  type,
-  name,
-  memberIds,
-}) => {
+const createConversation = async ({creatorId,type,name,memberIds = [],}) => {
+  
+  // BASIC VALIDATION
+  if (!["direct", "group"].includes(type)) {
+    const error = new Error("Invalid conversation type");
+    error.statusCode = 400;
+    throw error;
+  }
+  // VERIFY USERS EXIST
+ 
   const uniqueMemberIds = [
     ...new Set([creatorId, ...memberIds]),
   ];
 
-  // DIRECT conversation
+  const users = await User.find({
+    _id: { $in: uniqueMemberIds },
+  }).select("_id");
+
+  if (users.length !== uniqueMemberIds.length) {
+    const error = new Error(
+      "One or more users do not exist"
+    );
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // DIRECT CONVERSATION
+
   if (type === "direct") {
-    if (uniqueMemberIds.length !== 2) {
+    // Must contain exactly one other user
+    if (memberIds.length !== 1) {
       const error = new Error(
         "Direct conversation must have exactly one other user"
       );
@@ -68,43 +86,57 @@ const createConversation = async ({
       throw error;
     }
 
-    const existingMemberships =
-      await ConversationMember.aggregate([
-        {
-          $match: {
-            userId: {
-              $in: uniqueMemberIds,
-            },
-          },
-        },
-        {
-          $group: {
-            _id: "$conversationId",
-            users: {
-              $addToSet: "$userId",
-            },
-          },
-        },
-        {
-          $match: {
-            users: {
-              $all: uniqueMemberIds,
-            },
-          },
-        },
-      ]);
+    const otherUserId = memberIds[0];
 
-    if (existingMemberships.length > 0) {
-      const existingConversation =
+    // Creator cannot create conversation with himself
+    if (creatorId.toString() === otherUserId.toString()) {
+      const error = new Error(
+        "You cannot create a direct conversation with yourself"
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // FIND SHARED CONVERSATIONS
+
+    const creatorMemberships =
+      await ConversationMember.find({
+        userId: creatorId,
+      }).select("conversationId");
+
+    const otherUserMemberships =
+      await ConversationMember.find({
+        userId: otherUserId,
+      }).select("conversationId");
+
+    const creatorConversationIds = new Set(
+      creatorMemberships.map((membership) =>
+        membership.conversationId.toString()
+      )
+    );
+
+    const sharedConversationIds =
+      otherUserMemberships
+        .map((membership) => membership.conversationId)
+        .filter((conversationId) =>
+          creatorConversationIds.has(
+            conversationId.toString()
+          )
+        );
+
+    // CHECK EXISTING ACTIVE DIRECT
+   
+    if (sharedConversationIds.length > 0) {
+      const existingDirectConversation =
         await Conversation.findOne({
-          _id: existingMemberships[0]._id,
+          _id: { $in: sharedConversationIds },
           type: "direct",
           deletedAt: null,
         });
 
-      if (existingConversation) {
+      if (existingDirectConversation) {
         const error = new Error(
-          "Direct conversation already exists"
+          "A direct conversation with this user already exists"
         );
         error.statusCode = 409;
         throw error;
@@ -112,40 +144,35 @@ const createConversation = async ({
     }
   }
 
-  // GROUP conversation
-  if (type === "group" && !name?.trim()) {
-    const error = new Error(
-      "Group conversation name is required"
-    );
-    error.statusCode = 400;
-    throw error;
+  // GROUP CONVERSATION
+
+  if (type === "group") {
+    if (!name?.trim()) {
+      const error = new Error(
+        "Group conversation name is required"
+      );
+      error.statusCode = 400;
+      throw error;
+    }
   }
 
-  // Verify all users exist
-  const existingUsers = await User.find({
-    _id: {
-      $in: uniqueMemberIds,
-    },
-  }).select("_id");
-
-  if (existingUsers.length !== uniqueMemberIds.length) {
-    const error = new Error(
-      "One or more users do not exist"
-    );
-    error.statusCode = 400;
-    throw error;
-  }
-
+  // CREATE CONVERSATION
+  
   const conversation = await Conversation.create({
     type,
     name: type === "group" ? name.trim() : null,
     createdBy: creatorId,
   });
 
+  // CREATE MEMBERS
+
   const members = uniqueMemberIds.map((userId) => ({
     conversationId: conversation._id,
     userId,
-    role: userId === creatorId ? "admin" : "member",
+    role:
+      userId.toString() === creatorId.toString()
+        ? "admin"
+        : "member",
   }));
 
   await ConversationMember.insertMany(members);
@@ -185,7 +212,10 @@ const updateConversation = async (conversationId, updateData) => {
 
 const deleteConversation = async (conversationId) => {
   const conversation = await Conversation.findByIdAndUpdate(
-    conversationId,
+    {
+      _id: conversationId,
+      deletedAt: null,
+    },
     {
       deletedAt: new Date(),
     },
@@ -238,25 +268,80 @@ const updateConversationMemberRole = async (conversationId, userId, newRole) => 
     return member;
 };
 
-const searchConversations = async (query, userId) => {
-    const memberships = await ConversationMember.find({
-      userId,
-    }).select("conversationId");
+const searchConversations = async (userId, query) => {
+  // 1. Get conversations where current user is a member
+  const memberships = await ConversationMember.find({
+    userId,
+  }).select("conversationId");
 
-    const conversationIds = memberships.map((membership) => membership.conversationId);
+  const conversationIds = memberships.map(
+    (membership) => membership.conversationId
+  );
 
-    const conversations = await Conversation.find({
-      _id: { $in: conversationIds},
-      deletedAt: null,
-      $or: [
-        {name: { $regex: query, $options: "i" }},
-      ],
-    })
-    .sort({ lastMessageAt: -1})
-    .populate("lastMessage", "senderId content createdAt deletedAt" )
+  // 2. Find users matching the search query
+  const matchingUsers = await User.find({
+    _id: { $ne: userId },
+    $or: [
+      { name: { $regex: query, $options: "i" } },
+      { username: { $regex: query, $options: "i" } },
+    ],
+  }).select("_id");
 
-    return conversations;
-}
+  const matchingUserIds = matchingUsers.map((user) => user._id);
+
+  // 3. Find direct conversations containing a matching user
+  const directMemberships = await ConversationMember.find({
+    conversationId: { $in: conversationIds },
+    userId: { $in: matchingUserIds },
+  }).select("conversationId");
+
+  const directConversationIds = directMemberships.map(
+    (membership) => membership.conversationId
+  );
+
+  // 4. Find group conversations whose name matches
+  const groupConversations = await Conversation.find({
+    _id: { $in: conversationIds },
+    type: "group",
+    deletedAt: null,
+    name: { $regex: query, $options: "i" },
+  });
+
+  // 5. Get direct conversations
+  const directConversations = await Conversation.find({
+    _id: { $in: directConversationIds },
+    type: "direct",
+    deletedAt: null,
+  });
+
+  // 6. Combine both results
+  const conversations = [
+    ...groupConversations,
+    ...directConversations,
+  ];
+
+  // 7. Sort newest activity first
+  conversations.sort((a, b) => {
+    const dateA = a.lastMessageAt
+      ? new Date(a.lastMessageAt).getTime()
+      : 0;
+
+    const dateB = b.lastMessageAt
+      ? new Date(b.lastMessageAt).getTime()
+      : 0;
+
+    return dateB - dateA;
+  });
+
+  // 8. Populate last message
+  await Conversation.populate(conversations, {
+    path: "lastMessage",
+    select: "senderId content createdAt deletedAt",
+  });
+
+  return conversations;
+};
+
 module.exports = {
     getConversationsByUserId,
     createConversation,

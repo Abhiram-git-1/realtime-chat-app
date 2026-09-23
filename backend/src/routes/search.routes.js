@@ -10,6 +10,6 @@ const router = express.Router();
 
 router.get("/users",authenticate, validateQuery(searchQuerySchema),userController.searchUsers);
 
-router.get("/conversations",authenticate, valiadteQuery(searchQuerySchema),conversationController.searchConversations);
+router.get("/conversations",authenticate, validateQuery(searchQuerySchema),conversationController.searchConversations);
 
 module.exports = router;
