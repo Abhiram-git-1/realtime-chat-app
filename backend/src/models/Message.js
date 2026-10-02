@@ -25,6 +25,26 @@ const messageSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    deliveryStatus: [
+    {
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+        },
+
+        deliveredAt: {
+            type: Date,
+            default: null,
+        },
+
+        readAt:{
+            type: Date,
+            default: null
+        }
+    },
+    ],
   },
   {
     timestamps: true,

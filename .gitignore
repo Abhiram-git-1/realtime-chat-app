@@ -25,3 +25,5 @@ Thumbs.db
 
 #text files
 *.txt
+
+frontend/src/.sample.jsx
