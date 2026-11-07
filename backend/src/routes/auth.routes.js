@@ -51,6 +51,9 @@ router.get(
   }),
   googleCallback
 );
+router.get("/google/failure", (req, res) => {
+  res.redirect(`${process.env.CLIENT_URL}/login?oauth=failed`);
+});
 router.get("/sessions", authenticate, getSessions);
 router.delete("/sessions/:id", authenticate, revokeSession);
 // router.get("/verify-email/status", authenticate, getEmailVerificationStatus);

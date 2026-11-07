@@ -62,6 +62,55 @@ const createMessage = async ({ conversationId, senderId, content }) => {
 
   return message;
 };
+
+const markMessagesAsDelivered = async ({
+  conversationId,
+  userId,
+}) => {
+  const pendingMessages = await Message.find({
+    conversationId,
+    deletedAt: null,
+    deliveryStatus: {
+      $elemMatch: {
+        userId,
+        deliveredAt: null,
+      },
+    },
+  }).select("_id deliveryStatus");
+
+  if (pendingMessages.length === 0) {
+    return {
+      messageIds: [],
+      deliveredAt: null,
+    };
+  }
+
+  const deliveredAt = new Date();
+  const messageIds = [];
+
+  for (const message of pendingMessages) {
+    const delivery = message.deliveryStatus.find(
+      (item) =>
+        item.userId.toString() === userId.toString() &&
+        !item.deliveredAt,
+    );
+
+    if (!delivery) {
+      continue;
+    }
+
+    delivery.deliveredAt = deliveredAt;
+
+    await message.save();
+
+    messageIds.push(message._id);
+  }
+
+  return {
+    messageIds,
+    deliveredAt,
+  };
+};
 const markMessagesAsRead = async ({ conversationId, userId }) => {
   const unreadMessages = await Message.find({
     conversationId,
@@ -123,10 +172,17 @@ const getMessageById = async (messageId) => {
 };
 
 const updateMessage = async (messageId, updateData) => {
-  const message = await Message.findByIdAndUpdate(messageId, updateData, {
-    new: true,
-    runValidators: true,
-  }).populate("senderId", "_id name username avatar");
+  const message = await Message.findByIdAndUpdate(
+    messageId,
+    {
+      ...updateData,
+      editedAt: new Date(),
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  ).populate("senderId", "_id name username avatar");
 
   return message;
 };
@@ -141,12 +197,32 @@ const deleteMessage = async (messageId) => {
       new: true,
     },
   );
+
+  if (!message) {
+    return null;
+  }
+
+  const conversation = await Conversation.findById(
+    message.conversationId,
+  );
+
+  if (
+    conversation &&
+    conversation.lastMessage &&
+    String(conversation.lastMessage) === String(message._id)
+  ) {
+    conversation.lastMessageAt = message.createdAt;
+
+    await conversation.save();
+  }
+
   return message;
 };
 
 module.exports = {
   getConversationMessages,
   createMessage,
+  markMessagesAsDelivered,
   markMessagesAsRead,
   getMessageById,
   updateMessage,

@@ -5,7 +5,10 @@ const Session = require("../models/Session");
 const jwt = require("jsonwebtoken");
 
 const { generateOTP } = require("../utils/otp");
-const { sendVerificationOTP, sendPasswordResetOTP } = require("../services/email.service");
+const {
+  sendVerificationOTP,
+  sendPasswordResetOTP,
+} = require("../services/email.service");
 const { generateAccessToken, generateRefreshToken } = require("../utils/token");
 const { hashToken } = require("../utils/hash");
 const register = async (req, res) => {
@@ -28,10 +31,7 @@ const register = async (req, res) => {
     const normalizedUsername = username.toLowerCase();
     const normalizedEmail = email.toLowerCase();
     const existingUser = await User.findOne({
-      $or: [
-        { email: normalizedEmail },
-        { username: normalizedUsername },
-      ],
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
 
     if (existingUser) {
@@ -51,7 +51,7 @@ const register = async (req, res) => {
       username: normalizedUsername,
       email: normalizedEmail,
       password: hashedPassword,
-      
+
       emailVerificationOTP: hashedOTP,
       emailVerificationOTPExpires: otpExpires,
       emailVerificationOTPAttempts: 0,
@@ -94,7 +94,7 @@ const verifyEmail = async (req, res) => {
     const user = await User.findOne({
       email: email.toLowerCase().trim(),
     }).select(
-      "+emailVerificationOTP +emailVerificationOTPExpires +emailVerificationOTPAttempts +emailVerificationOTPLastSentAt"
+      "+emailVerificationOTP +emailVerificationOTPExpires +emailVerificationOTPAttempts +emailVerificationOTPLastSentAt",
     );
 
     if (!user) {
@@ -111,10 +111,7 @@ const verifyEmail = async (req, res) => {
       });
     }
 
-    if (
-      !user.emailVerificationOTP ||
-      !user.emailVerificationOTPExpires
-    ) {
+    if (!user.emailVerificationOTP || !user.emailVerificationOTPExpires) {
       return res.status(400).json({
         success: false,
         message: "Verification OTP not found",
@@ -128,17 +125,14 @@ const verifyEmail = async (req, res) => {
       });
     }
 
-    if (user.emailVerificationOTPAttempts >= 5){
+    if (user.emailVerificationOTPAttempts >= 5) {
       return res.status(429).json({
         success: false,
         message: "Too many attempts. Please request a new OTP.",
       });
     }
 
-    const isOTPValid = await bcrypt.compare(
-      otp,
-      user.emailVerificationOTP
-    );
+    const isOTPValid = await bcrypt.compare(otp, user.emailVerificationOTP);
 
     if (!isOTPValid) {
       user.emailVerificationOTPAttempts += 1;
@@ -186,7 +180,7 @@ const resendVerificationOTP = async (req, res) => {
     const user = await User.findOne({
       email: normalizedEmail,
     }).select(
-      "+emailVerificationOTP +emailVerificationOTPExpires +emailVerificationOTPAttempts +emailVerificationOTPLastSentAt"
+      "+emailVerificationOTP +emailVerificationOTPExpires +emailVerificationOTPAttempts +emailVerificationOTPLastSentAt",
     );
 
     if (!user) {
@@ -203,12 +197,14 @@ const resendVerificationOTP = async (req, res) => {
       });
     }
 
-    if(user.emailVerificationOTPLastSentAt &&
-       Date.now() - user.emailVerificationOTPLastSentAt.getTime() < 60*1000){
-        return res.status(429).json({
-          success: false,
-          message: "Please wait before requesting another OTP.",
-        });
+    if (
+      user.emailVerificationOTPLastSentAt &&
+      Date.now() - user.emailVerificationOTPLastSentAt.getTime() < 60 * 1000
+    ) {
+      return res.status(429).json({
+        success: false,
+        message: "Please wait before requesting another OTP.",
+      });
     }
 
     // Generate new OTP
@@ -218,13 +214,11 @@ const resendVerificationOTP = async (req, res) => {
     const hashedOTP = await bcrypt.hash(otp, 10);
 
     // OTP expires in 10 minutes
-    const otpExpires = new Date(
-      Date.now() + 10 * 60 * 1000
-    );
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
     // Replace old OTP
     user.emailVerificationOTP = hashedOTP;
     user.emailVerificationOTPExpires = otpExpires;
-     // New OTP gets a fresh attempt count
+    // New OTP gets a fresh attempt count
     user.emailVerificationOTPAttempts = 0;
     user.emailVerificationOTPLastSentAt = new Date();
     await user.save();
@@ -285,10 +279,7 @@ const login = async (req, res) => {
       });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
     if (!isPasswordCorrect) {
       return res.status(401).json({
@@ -310,10 +301,7 @@ const login = async (req, res) => {
     // Generate tokens
     const accessToken = generateAccessToken(user, session._id);
 
-    const refreshToken = generateRefreshToken(
-      user,
-      session._id
-    );
+    const refreshToken = generateRefreshToken(user, session._id);
 
     // Store only hash of refresh token
     session.refreshTokenHash = hashToken(refreshToken);
@@ -371,10 +359,7 @@ const refreshToken = async (req, res) => {
     let decoded;
 
     try {
-      decoded = jwt.verify(
-        token,
-        process.env.JWT_REFRESH_SECRET
-      );
+      decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -447,10 +432,7 @@ const refreshToken = async (req, res) => {
     // Generate new tokens
     const newAccessToken = generateAccessToken(user, session._id);
 
-    const newRefreshToken = generateRefreshToken(
-      user,
-      session._id
-    );
+    const newRefreshToken = generateRefreshToken(user, session._id);
 
     // Rotate refresh token
     session.refreshTokenHash = hashToken(newRefreshToken);
@@ -495,10 +477,7 @@ const logout = async (req, res) => {
     let decoded;
 
     try {
-      decoded = jwt.verify(
-        token,
-        process.env.JWT_REFRESH_SECRET
-      );
+      decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
     } catch (error) {
       // Token is already invalid/expired.
       // Clear the cookie anyway.
@@ -523,7 +502,7 @@ const logout = async (req, res) => {
       },
       {
         revokedAt: new Date(),
-      }
+      },
     );
 
     res.clearCookie("refreshToken", {
@@ -560,10 +539,7 @@ const logoutAll = async (req, res) => {
     let decoded;
 
     try {
-      decoded = jwt.verify(
-        token,
-        process.env.JWT_REFRESH_SECRET
-      );
+      decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -580,7 +556,7 @@ const logoutAll = async (req, res) => {
       },
       {
         revokedAt: new Date(),
-      }
+      },
     );
 
     res.clearCookie("refreshToken", {
@@ -657,7 +633,7 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({
       email: normalizedEmail,
     }).select(
-      "+passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts"
+      "+passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts",
     );
 
     /*
@@ -665,7 +641,7 @@ const forgotPassword = async (req, res) => {
       the email exists or not.
 
       This prevents account enumeration.
-    */    
+    */
 
     if (!user) {
       return res.status(200).json({
@@ -707,9 +683,7 @@ const forgotPassword = async (req, res) => {
 
     const hashedOTP = await bcrypt.hash(otp, 10);
 
-    const otpExpires = new Date(
-      Date.now() + 10 * 60 * 1000
-    );
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     user.passwordResetOTP = hashedOTP;
     user.passwordResetOTPExpires = otpExpires;
@@ -721,10 +695,7 @@ const forgotPassword = async (req, res) => {
 
     await user.save();
 
-    await sendPasswordResetOTP(
-      user.email,
-      otp
-    );
+    await sendPasswordResetOTP(user.email, otp);
 
     return res.status(200).json({
       success: true,
@@ -757,7 +728,7 @@ const verifyResetOTP = async (req, res) => {
     const user = await User.findOne({
       email: normalizedEmail,
     }).select(
-      "+passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts +passwordResetOTPLastSentAt"
+      "+passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts +passwordResetOTPLastSentAt",
     );
 
     if (!user) {
@@ -767,10 +738,7 @@ const verifyResetOTP = async (req, res) => {
       });
     }
 
-    if (
-      !user.passwordResetOTP ||
-      !user.passwordResetOTPExpires
-    ) {
+    if (!user.passwordResetOTP || !user.passwordResetOTPExpires) {
       return res.status(400).json({
         success: false,
         message: "Invalid or expired reset OTP",
@@ -784,17 +752,14 @@ const verifyResetOTP = async (req, res) => {
       });
     }
 
-    if (user.passwordResetOTPAttempts >= 5){
+    if (user.passwordResetOTPAttempts >= 5) {
       return res.status(400).json({
         success: false,
         message: "Too Many incorrect attempts",
       });
     }
 
-    const isOTPValid = await bcrypt.compare(
-      otp,
-      user.passwordResetOTP
-    );
+    const isOTPValid = await bcrypt.compare(otp, user.passwordResetOTP);
 
     if (!isOTPValid) {
       user.passwordResetOTPAttempts += 1;
@@ -844,7 +809,7 @@ const resendResetOTP = async (req, res) => {
     const user = await User.findOne({
       email: normalizedEmail,
     }).select(
-      "+passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts +passwordResetOTPLastSentAt"
+      "+passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts +passwordResetOTPLastSentAt",
     );
 
     // Don't reveal whether an account exists
@@ -864,7 +829,10 @@ const resendResetOTP = async (req, res) => {
       });
     }
 
-    if (user.passwordResetOTPLastSentAt && new Date() - user.passwordResetOTPLastSentAt < 60*1000) {
+    if (
+      user.passwordResetOTPLastSentAt &&
+      new Date() - user.passwordResetOTPLastSentAt < 60 * 1000
+    ) {
       return res.status(429).json({
         success: false,
         message: "Please wait before requesting a new reset OTP",
@@ -878,9 +846,7 @@ const resendResetOTP = async (req, res) => {
     const hashedOTP = await bcrypt.hash(otp, 10);
 
     // New expiry: 10 minutes
-    const otpExpires = new Date(
-      Date.now() + 10 * 60 * 1000
-    );
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     user.passwordResetOTP = hashedOTP;
     user.passwordResetOTPExpires = otpExpires;
@@ -892,10 +858,7 @@ const resendResetOTP = async (req, res) => {
 
     await user.save();
 
-    await sendPasswordResetOTP(
-      user.email,
-      otp
-    );
+    await sendPasswordResetOTP(user.email, otp);
 
     return res.status(200).json({
       success: true,
@@ -934,7 +897,9 @@ const resetPassword = async (req, res) => {
 
     const user = await User.findOne({
       email: normalizedEmail,
-    }).select("+password +passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts +passwordResetOTPLastSentAt");
+    }).select(
+      "+password +passwordResetOTP +passwordResetOTPExpires +passwordResetOTPAttempts +passwordResetOTPLastSentAt",
+    );
 
     if (!user) {
       return res.status(400).json({
@@ -952,10 +917,7 @@ const resetPassword = async (req, res) => {
     }
 
     // Hash new password
-    const hashedPassword = await bcrypt.hash(
-      newPassword,
-      12
-    );
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     user.password = hashedPassword;
     user.passwordChangedAt = new Date();
@@ -976,7 +938,7 @@ const resetPassword = async (req, res) => {
       },
       {
         revokedAt: new Date(),
-      }
+      },
     );
 
     // Clear current refresh-token cookie
@@ -988,8 +950,7 @@ const resetPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "Password reset successfully. Please login again.",
+      message: "Password reset successfully. Please login again.",
     });
   } catch (error) {
     console.error("Reset password error:", error);
@@ -1008,30 +969,25 @@ const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message:
-          "Current password and new password are required",
+        message: "Current password and new password are required",
       });
     }
 
     if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message:
-          "New password must be at least 8 characters long",
+        message: "New password must be at least 8 characters long",
       });
     }
 
     if (currentPassword === newPassword) {
       return res.status(400).json({
         success: false,
-        message:
-          "New password must be different from current password",
+        message: "New password must be different from current password",
       });
     }
 
-    const user = await User.findById(
-      req.user.userId
-    ).select("+password");
+    const user = await User.findById(req.user.userId).select("+password");
 
     if (!user) {
       return res.status(404).json({
@@ -1040,11 +996,10 @@ const changePassword = async (req, res) => {
       });
     }
 
-    const isCurrentPasswordCorrect =
-      await bcrypt.compare(
-        currentPassword,
-        user.password
-      );
+    const isCurrentPasswordCorrect = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
 
     if (!isCurrentPasswordCorrect) {
       return res.status(401).json({
@@ -1053,10 +1008,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(
-      newPassword,
-      12
-    );
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     user.password = hashedPassword;
 
@@ -1070,7 +1022,7 @@ const changePassword = async (req, res) => {
       },
       {
         revokedAt: new Date(),
-      }
+      },
     );
 
     // Remove current refresh-token cookie
@@ -1082,8 +1034,7 @@ const changePassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "Password changed successfully. Please login again.",
+      message: "Password changed successfully. Please login again.",
     });
   } catch (error) {
     console.error("Change password error:", error);
@@ -1118,22 +1069,16 @@ const googleCallback = async (req, res) => {
       device: req.headers["user-agent"] || "Unknown device",
       userAgent: req.headers["user-agent"] || null,
       ipAddress: req.ip,
-      expiresAt: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
     // Generate our normal JWT tokens
     const accessToken = generateAccessToken(user, session._id);
 
-    const refreshToken = generateRefreshToken(
-      user,
-      session._id
-    );
+    const refreshToken = generateRefreshToken(user, session._id);
 
     // Store only the hash
-    session.refreshTokenHash =
-      hashToken(refreshToken);
+    session.refreshTokenHash = hashToken(refreshToken);
 
     await session.save();
 
@@ -1149,28 +1094,9 @@ const googleCallback = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    /*
-      For now return the access token as JSON.
+    const frontendURL = process.env.CLIENT_URL;
 
-      Later, when our React frontend exists,
-      this can redirect to the frontend with
-      a safer token-delivery architecture.
-    */
-
-    return res.status(200).json({
-      success: true,
-      message: "Google login successful",
-      accessToken,
-      user: {
-        id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-      },
-    });
+    return res.redirect(`${frontendURL}/oauth/callback`);
   } catch (error) {
     console.error("Google callback error:", error);
 
@@ -1187,28 +1113,22 @@ const getSessions = async (req, res) => {
       user: req.user.userId,
       revokedAt: null,
     })
-      .select(
-        "_id device userAgent ipAddress createdAt lastUsedAt expiresAt"
-      )
+      .select("_id device userAgent ipAddress createdAt lastUsedAt expiresAt")
       .sort({
         createdAt: -1,
       });
 
-      const formattedSessions = sessions.map(
-      (session) => ({
-        id: session._id,
-        device: session.device,
-        userAgent: session.userAgent,
-        ipAddress: session.ipAddress,
-        createdAt: session.createdAt,
-        lastUsedAt: session.lastUsedAt,
-        expiresAt: session.expiresAt,
-        revokedAt: session.revokedAt,
-        current:
-          session._id.toString() ===
-          req.user.sessionId.toString(),
-      })
-    );
+    const formattedSessions = sessions.map((session) => ({
+      id: session._id,
+      device: session.device,
+      userAgent: session.userAgent,
+      ipAddress: session.ipAddress,
+      createdAt: session.createdAt,
+      lastUsedAt: session.lastUsedAt,
+      expiresAt: session.expiresAt,
+      revokedAt: session.revokedAt,
+      current: session._id.toString() === req.user.sessionId.toString(),
+    }));
 
     return res.status(200).json({
       success: true,
@@ -1251,6 +1171,15 @@ const revokeSession = async (req, res) => {
 
     await session.save();
 
+    const io = req.app.get("io");
+
+    if (io) {
+      for (const [, socket] of io.sockets.sockets) {
+        if (String(socket.user?.sessionId) === String(session._id)) {
+          socket.disconnect(true);
+        }
+      }
+    }
     return res.status(200).json({
       success: true,
       message: "Session revoked successfully",

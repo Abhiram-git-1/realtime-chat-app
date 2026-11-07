@@ -27,12 +27,6 @@ app.use(
 
 app.use(express.json());
 
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log(
-    "EMAIL_PASS exists:",
-    !!process.env.EMAIL_PASS
-);
-
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/profile", profileRoutes);

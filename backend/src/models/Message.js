@@ -26,34 +26,39 @@ const messageSchema = new mongoose.Schema(
       default: null,
     },
 
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+
     deliveryStatus: [
-    {
+      {
         userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
         },
 
         deliveredAt: {
-            type: Date,
-            default: null,
+          type: Date,
+          default: null,
         },
 
-        readAt:{
-            type: Date,
-            default: null
-        }
-    },
+        readAt: {
+          type: Date,
+          default: null,
+        },
+      },
     ],
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 messageSchema.index({
-    conversationId: 1,
-    createdAt: -1,
+  conversationId: 1,
+  createdAt: -1,
 });
 
 const Message = mongoose.model("Message", messageSchema);

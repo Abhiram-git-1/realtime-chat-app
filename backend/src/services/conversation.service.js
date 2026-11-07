@@ -1,21 +1,44 @@
 const ConversationMember = require("../models/ConversationMember");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
-const getConversationsByUserId = async (userId) =>{
+const getConversationsByUserId = async (userId) => {
     const memberships = await ConversationMember.find({
         userId,
     }).select("conversationId");
 
-    const conversationIds = memberships.map((membership) => membership.conversationId);
+    const conversationIds = memberships.map(
+        (membership) => membership.conversationId
+    );
 
     const conversations = await Conversation.find({
-        _id: { $in: conversationIds},
+        _id: { $in: conversationIds },
         deletedAt: null,
     })
-    .sort({ lastMessageAt: -1})
-    .populate("lastMessage", "senderId content createdAt deletedAt" )
+        .sort({ lastMessageAt: -1 })
+        .populate(
+            "lastMessage",
+            "senderId content createdAt deletedAt"
+        );
 
-    return conversations;
+    const populatedConversations = await Promise.all(
+        conversations.map(async (conversation) => {
+            const members = await ConversationMember.find({
+                conversationId: conversation._id,
+            })
+                .populate(
+                    "userId",
+                    "_id name username avatar bio"
+                )
+                .select("userId role");
+
+            return {
+                ...conversation.toObject(),
+                members,
+            };
+        })
+    );
+
+    return populatedConversations;
 };
 
 /*const createConversation = async ({creatorId, type, name, memberIds}) => {
@@ -180,6 +203,24 @@ const createConversation = async ({creatorId,type,name,memberIds = [],}) => {
   return conversation;
 };
 const getConversationById = async (conversationId) => {
+  const getConversationById = async (conversationId) => {
+  console.log(
+    "🔥 SERVICE getConversationById CALLED:",
+    conversationId
+  );
+
+  const conversation = await Conversation.findOne({
+    _id: conversationId,
+    deletedAt: null,
+  });
+
+  console.log(
+    "🔥 CONVERSATION FOUND:",
+    Boolean(conversation)
+  );
+
+  // keep the rest of your code below
+};
   const conversation = await Conversation.findOne({
     _id: conversationId,
     deletedAt: null,
@@ -190,7 +231,23 @@ const getConversationById = async (conversationId) => {
       "senderId content createdAt deletedAt"
     );
 
-  return conversation;
+  if (!conversation) {
+    return null;
+  }
+
+  const members = await ConversationMember.find({
+    conversationId: conversation._id,
+  })
+    .populate(
+      "userId",
+      "_id name username avatar bio"
+    )
+    .select("userId role");
+
+  return {
+    ...conversation.toObject(),
+    members,
+  };
 };
 const updateConversation = async (conversationId, updateData) => {
   const conversation = await Conversation.findByIdAndUpdate(

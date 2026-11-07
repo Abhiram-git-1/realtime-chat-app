@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
+const Session = require("../models/Session");
 
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -22,13 +23,33 @@ const authenticate = (req, res, next) => {
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_ACCESS_SECRET
+      process.env.JWT_ACCESS_SECRET,
     );
 
     if (!decoded.userId || !decoded.sessionId) {
       return res.status(401).json({
         success: false,
         message: "Invalid access token",
+      });
+    }
+
+    const session = await Session.findOne({
+      _id: decoded.sessionId,
+      user: decoded.userId,
+      revokedAt: null,
+    });
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Session has been revoked or no longer exists",
+      });
+    }
+
+    if (session.expiresAt && session.expiresAt <= new Date()) {
+      return res.status(401).json({
+        success: false,
+        message: "Session has expired",
       });
     }
 

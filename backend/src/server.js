@@ -19,7 +19,7 @@ const io = new Server(server, {
     credentials: true,
   },
 });
-
+app.set("io", io);
 io.use(socketAuthenticate);
 
 io.on("connection", (socket) => {

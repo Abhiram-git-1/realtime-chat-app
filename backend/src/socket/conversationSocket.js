@@ -38,6 +38,23 @@ const registerConversationSocket = (io, socket) => {
         `User ${socket.user.userId} joined conversation ${conversationId}`,
       );
 
+      // Mark any previously undelivered messages as delivered
+      // for the user who just joined the conversation.
+      const deliveryResult = await messageService.markMessagesAsDelivered({
+        conversationId,
+        userId: socket.user.userId,
+      });
+
+      if (deliveryResult.messageIds.length > 0) {
+        for (const messageId of deliveryResult.messageIds) {
+          io.to(conversationId).emit("message_delivery_updated", {
+            messageId,
+            userId: socket.user.userId,
+            deliveredAt: deliveryResult.deliveredAt,
+          });
+        }
+      }
+
       // Get all members of this conversation
       const members = await ConversationMember.find({
         conversationId,
@@ -143,14 +160,126 @@ const registerConversationSocket = (io, socket) => {
       // 5. Get complete message with sender information
       const populatedMessage = await messageService.getMessageById(message._id);
 
-      // send mesg to sender
+      // 6. Find all other members of the conversation
+      const recipientMembers = await ConversationMember.find({
+        conversationId,
+        userId: { $ne: socket.user.userId },
+      }).select("userId");
+
+      const recipientUserIds = recipientMembers.map((member) =>
+        String(member.userId),
+      );
+
+      // 7. Find connected sockets belonging to recipients
+      const recipientSockets = [];
+
+      for (const [socketId, targetSocket] of io.sockets.sockets) {
+        if (!targetSocket.user?.userId) {
+          continue;
+        }
+
+        if (recipientUserIds.includes(String(targetSocket.user.userId))) {
+          recipientSockets.push(targetSocket);
+        }
+      }
+
+      // 8. Determine delivery/read state
+      const deliveredAt = new Date();
+
+      let messageChanged = false;
+      let readAt = null;
+
+      for (const recipientMember of recipientMembers) {
+        const recipientUserId = String(recipientMember.userId);
+
+        const userSockets = recipientSockets.filter(
+          (targetSocket) =>
+            String(targetSocket.user.userId) === recipientUserId,
+        );
+
+        // Recipient is completely offline.
+        if (userSockets.length === 0) {
+          continue;
+        }
+
+        const delivery = message.deliveryStatus.find(
+          (item) => String(item.userId) === recipientUserId,
+        );
+
+        if (!delivery) {
+          continue;
+        }
+
+        // Recipient has the app open.
+        if (!delivery.deliveredAt) {
+          delivery.deliveredAt = deliveredAt;
+          messageChanged = true;
+        }
+
+        // If ANY socket of this recipient is inside this conversation,
+        // they are actively viewing the conversation.
+        const isViewingConversation = userSockets.some((targetSocket) =>
+          targetSocket.rooms.has(String(conversationId)),
+        );
+
+        if (isViewingConversation) {
+          if (!delivery.readAt) {
+            delivery.readAt = deliveredAt;
+            messageChanged = true;
+          }
+
+          if (!readAt) {
+            readAt = deliveredAt;
+          }
+        }
+      }
+
+      // 9. Persist delivery/read state
+      if (messageChanged) {
+        await message.save();
+      }
+
+      // 10. Send message back to sender
       socket.emit("message_sent", {
         message: populatedMessage,
       });
-      // send mesg to all other members
-      socket.to(conversationId).emit("new_message", {
-        message: populatedMessage,
-      });
+
+      // 11. Send realtime message to every connected recipient socket
+      for (const targetSocket of recipientSockets) {
+        targetSocket.emit("new_message", {
+          message: populatedMessage,
+        });
+      }
+
+      // 12. Notify sender about delivery state
+      for (const recipientMember of recipientMembers) {
+        const recipientUserId = String(recipientMember.userId);
+
+        const delivery = message.deliveryStatus.find(
+          (item) => String(item.userId) === recipientUserId,
+        );
+
+        if (!delivery?.deliveredAt) {
+          continue;
+        }
+
+        io.to(conversationId).emit("message_delivery_updated", {
+          messageId: message._id,
+          userId: recipientMember.userId,
+          deliveredAt: delivery.deliveredAt,
+        });
+
+        // If recipient is actively viewing the conversation,
+        // notify that the message has been read.
+        if (delivery.readAt) {
+          io.to(conversationId).emit("messages_read", {
+            conversationId,
+            userId: recipientMember.userId,
+            messageIds: [message._id],
+            readAt: delivery.readAt,
+          });
+        }
+      }
     } catch (error) {
       console.error("Send message error:", error);
 
